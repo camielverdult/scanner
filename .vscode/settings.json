@@ -1,0 +1,8 @@
+{
+    "idf.adapterTargetName": "esp32c3",
+    "files.associations": {
+        "esp_gap_ble_api.h": "c",
+        "freertos.h": "c",
+        "bt_trace.h": "c"
+    }
+}
