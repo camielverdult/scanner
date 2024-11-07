@@ -76,76 +76,52 @@ static void get_device_type(esp_ble_gap_cb_param_t *param, char *type, int type_
     }
 }
 
-static esp_bd_addr_t bonded_devices[MAX_BONDED_DEVICES];
-static int num_bonded_devices = 0;
+// static esp_bd_addr_t bonded_devices[MAX_BONDED_DEVICES];
+// static int num_bonded_devices = 0;
 
-// Helper function to retrieve bonded devices from NVS
-void get_bonded_devices(esp_bd_addr_t *bonded_devices, int *num_bonded) {
-    int dev_num = esp_ble_get_bond_device_num();
+// // Helper function to retrieve bonded devices from NVS
+// void get_bonded_devices(esp_bd_addr_t *bonded_devices, int *num_bonded) {
+//     int dev_num = esp_ble_get_bond_device_num();
 
-    if (dev_num == ESP_FAIL) {
-        ESP_LOGE(TAG, "Failed to get bonded device number");
-        *num_bonded = 0;
-        return;
-    }
+//     if (dev_num == ESP_FAIL) {
+//         ESP_LOGE(TAG, "Failed to get bonded device number");
+//         *num_bonded = 0;
+//         return;
+//     }
 
-    if (dev_num == 0) {
-        ESP_LOGI(TAG, "No bonded devices found");
-        *num_bonded = 0;
-        return;
-    } else {
-        ESP_LOGI(TAG, "Found %d bonded devices", dev_num);
-    }
+//     if (dev_num == 0) {
+//         ESP_LOGI(TAG, "No bonded devices found");
+//         *num_bonded = 0;
+//         return;
+//     } else {
+//         ESP_LOGI(TAG, "Found %d bonded devices", dev_num);
+//     }
 
-    // Allocate memory for the bonded device list
-    esp_ble_bond_dev_t *bond_dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
+//     // Allocate memory for the bonded device list
+//     esp_ble_bond_dev_t *bond_dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
 
-    // Get the bonded device list from NVS
-    esp_ble_get_bond_device_list(&dev_num, bond_dev_list);
+//     // Get the bonded device list from NVS
+//     esp_ble_get_bond_device_list(&dev_num, bond_dev_list);
 
-    *num_bonded = dev_num;
-    for (int i = 0; i < dev_num; i++) {
-        memcpy(bonded_devices[i], bond_dev_list[i].bd_addr, sizeof(esp_bd_addr_t));
-        // ESP_LOGI(TAG, "Bonded device %d: %02X:%02X:%02X:%02X:%02X:%02X", i,
-        //          bonded_devices[i][0], bonded_devices[i][1], bonded_devices[i][2],
-        //          bonded_devices[i][3], bonded_devices[i][4], bonded_devices[i][5]);
-    }
-    free(bond_dev_list);
-}
+//     *num_bonded = dev_num;
+//     for (int i = 0; i < dev_num; i++) {
+//         memcpy(bonded_devices[i], bond_dev_list[i].bd_addr, sizeof(esp_bd_addr_t));
+//         // ESP_LOGI(TAG, "Bonded device %d: %02X:%02X:%02X:%02X:%02X:%02X", i,
+//         //          bonded_devices[i][0], bonded_devices[i][1], bonded_devices[i][2],
+//         //          bonded_devices[i][3], bonded_devices[i][4], bonded_devices[i][5]);
+//     }
+//     free(bond_dev_list);
+// }
 
-// Check if the scanned device is a bonded device
-bool is_bonded_device(esp_bd_addr_t bda) {
-    for (int i = 0; i < num_bonded_devices; i++) {
-        if (memcmp(bda, bonded_devices[i], ESP_BD_ADDR_LEN) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// /* register three profiles, each profile corresponds to one connection,
-//    which makes it easy to handle each connection event */
-// #define PROFILE_NUM 3
-// #define PROFILE_A_APP_ID 0
-// #define PROFILE_B_APP_ID 1
-// #define PROFILE_C_APP_ID 2
-
-// /* One gatt-based profile one app_id and one gattc_if, this array will store the gattc_if returned by ESP_GATTS_REG_EVT */
-// static struct gattc_profile_inst gl_profile_tab[PROFILE_NUM] = {
-//     [PROFILE_A_APP_ID] = {
-//         .gattc_cb = gattc_profile_a_event_handler,
-//         .gattc_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
-//     },
-//     [PROFILE_B_APP_ID] = {
-//         .gattc_cb = gattc_profile_b_event_handler,
-//         .gattc_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
-//     },
-//     [PROFILE_C_APP_ID] = {
-//         .gattc_cb = gattc_profile_c_event_handler,
-//         .gattc_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
-//     },
-
-// };
+// // Check if the scanned device is a bonded device
+// bool is_bonded_device(esp_bd_addr_t bda) {
+//     for (int i = 0; i < num_bonded_devices; i++) {
+//         if (memcmp(bda, bonded_devices[i], ESP_BD_ADDR_LEN) == 0) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
 
 // Set scan parameters
 static esp_ble_scan_params_t ble_scan_params = {
@@ -160,22 +136,22 @@ static esp_ble_scan_params_t ble_scan_params = {
 void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     switch (event) {
         // Handle authentication events
-        case ESP_GAP_BLE_AUTH_CMPL_EVT:
-            ESP_LOGI(TAG, "Authentication completed with success: %d", param->ble_security.auth_cmpl.success);
-            if (param->ble_security.auth_cmpl.success) {
-                ESP_LOGI(TAG, "Device bonded successfully");
-            }
-            break;
+        // case ESP_GAP_BLE_AUTH_CMPL_EVT:
+        //     ESP_LOGI(TAG, "Authentication completed with success: %d", param->ble_security.auth_cmpl.success);
+        //     if (param->ble_security.auth_cmpl.success) {
+        //         ESP_LOGI(TAG, "Device bonded successfully");
+        //     }
+        //     break;
 
-        case ESP_GAP_BLE_PASSKEY_REQ_EVT:
-            ESP_LOGI(TAG, "Passkey requested");
-            esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, BLE_PASSKEY);
-            break;
+        // case ESP_GAP_BLE_PASSKEY_REQ_EVT:
+        //     ESP_LOGI(TAG, "Passkey requested");
+        //     esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, BLE_PASSKEY);
+        //     break;
 
         case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT:
             if (param->scan_param_cmpl.status == ESP_BT_STATUS_SUCCESS) {
                 // Load bonded devices
-                get_bonded_devices(bonded_devices, &num_bonded_devices);
+                // get_bonded_devices(bonded_devices, &num_bonded_devices);
                 
                 // Scan for devices
                 ESP_LOGI(TAG, "Scan parameters set, starting scan...");
@@ -215,20 +191,20 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(TAG, "Scan stopped/completed");
             break;
 
-        case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT:
-            if (param->read_rssi_cmpl.status == ESP_BT_STATUS_SUCCESS) {
-                    ESP_LOGI(TAG, "RSSI of device %02X:%02X:%02X:%02X:%02X:%02X: %d dBm",
-                            param->read_rssi_cmpl.remote_addr[0], param->read_rssi_cmpl.remote_addr[1],
-                            param->read_rssi_cmpl.remote_addr[2], param->read_rssi_cmpl.remote_addr[3],
-                            param->read_rssi_cmpl.remote_addr[4], param->read_rssi_cmpl.remote_addr[5],
-                            param->read_rssi_cmpl.rssi);
+        // case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT:
+        //     if (param->read_rssi_cmpl.status == ESP_BT_STATUS_SUCCESS) {
+        //             ESP_LOGI(TAG, "RSSI of device %02X:%02X:%02X:%02X:%02X:%02X: %d dBm",
+        //                     param->read_rssi_cmpl.remote_addr[0], param->read_rssi_cmpl.remote_addr[1],
+        //                     param->read_rssi_cmpl.remote_addr[2], param->read_rssi_cmpl.remote_addr[3],
+        //                     param->read_rssi_cmpl.remote_addr[4], param->read_rssi_cmpl.remote_addr[5],
+        //                     param->read_rssi_cmpl.rssi);
                     
-                    // Re-read RSSI periodically
-                    esp_ble_gap_read_rssi(param->read_rssi_cmpl.remote_addr);
-                } else {
-                    ESP_LOGE(TAG, "Failed to read RSSI");
-                }
-            break;
+        //             // Re-read RSSI periodically
+        //             esp_ble_gap_read_rssi(param->read_rssi_cmpl.remote_addr);
+        //         } else {
+        //             ESP_LOGE(TAG, "Failed to read RSSI");
+        //         }
+        //     break;
 
         default:
             break;
@@ -236,25 +212,25 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 }
 
 // Handle GATT client events for connection, disconnection, and RSSI tracking
-void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) {
-    switch (event) {
-        case ESP_GATTC_OPEN_EVT:
-            if (param->open.status == ESP_GATT_OK) {
-                ESP_LOGI(TAG, "Connected to bonded device");
-                esp_ble_gap_read_rssi(param->open.remote_bda);  // Read initial RSSI
-            }
-            break;
+// void gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t *param) {
+//     switch (event) {
+//         case ESP_GATTC_OPEN_EVT:
+//             if (param->open.status == ESP_GATT_OK) {
+//                 ESP_LOGI(TAG, "Connected to bonded device");
+//                 esp_ble_gap_read_rssi(param->open.remote_bda);  // Read initial RSSI
+//             }
+//             break;
 
-        case ESP_GATTC_DISCONNECT_EVT:
-            ESP_LOGI(TAG, "Disconnected from bonded device, attempting to reconnect...");
-            // Attempt to reconnect to the bonded device
-            esp_ble_gattc_open(gattc_if, param->disconnect.remote_bda, BLE_ADDR_TYPE_RANDOM, true);  // Reconnect
-            break;
+//         case ESP_GATTC_DISCONNECT_EVT:
+//             ESP_LOGI(TAG, "Disconnected from bonded device, attempting to reconnect...");
+//             // Attempt to reconnect to the bonded device
+//             esp_ble_gattc_open(gattc_if, param->disconnect.remote_bda, BLE_ADDR_TYPE_RANDOM, true);  // Reconnect
+//             break;
 
-        default:
-            break;
-    }
-}
+//         default:
+//             break;
+//     }
+// }
 
 void app_main(void) {
     // Initialize NVS
