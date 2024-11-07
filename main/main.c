@@ -173,10 +173,11 @@ void app_main(void) {
     esp_ble_gap_register_callback(gap_event_handler);
 
     // Set scan parameters
-    esp_err_t ret = esp_ble_gap_set_scan_params(&ble_scan_params);
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "BLE scan parameters set successfully");
-    } else {
-        ESP_LOGE(TAG, "Failed to set scan params: %s", esp_err_to_name(ret));
-    }
+    ESP_ERROR_CHECK(esp_ble_gap_set_scan_params(&ble_scan_params));
+    // esp_err_t err = esp_ble_gap_set_scan_params(&ble_scan_params);
+    // if (ret == ESP_OK) {
+    //     ESP_LOGI(TAG, "BLE scan parameters set successfully");
+    // } else {
+    //     ESP_LOGE(TAG, "Failed to set scan params: %s", esp_err_to_name(ret));
+    // }
 }
