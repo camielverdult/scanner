@@ -3,6 +3,10 @@
     "files.associations": {
         "esp_gap_ble_api.h": "c",
         "freertos.h": "c",
-        "bt_trace.h": "c"
+        "bt_trace.h": "c",
+        "esp_bt_main.h": "c",
+        "esp_hidd_api.h": "c",
+        "compare": "c",
+        "cstdint": "c"
     }
 }
