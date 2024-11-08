@@ -173,29 +173,28 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             };
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &hid_info_attr, NULL));
 
-            // // Add HID Boot Mode characteristic
-            // don't need this in favor of the HID Protocol Mode characteristic
-            // uint8_t boot_mode = 0x00;  // Boot Mode
-            // esp_attr_value_t boot_mode_attr = {
-            //     .attr_max_len = sizeof(boot_mode),
-            //     .attr_len = sizeof(boot_mode),
-            //     .attr_value = &boot_mode
-            // };
+            // Add HID Boot Mode characteristic
+            uint8_t boot_mode = 0x00;  // Boot Mode
+            esp_attr_value_t boot_mode_attr = {
+                .attr_max_len = sizeof(boot_mode),
+                .attr_len = sizeof(boot_mode),
+                .attr_value = &boot_mode
+            };
 
-            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
-            // esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
-            //                ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
-            //                &boot_mode_attr, NULL);
+            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
+            esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                           ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
+                           &boot_mode_attr, NULL);
 
             // HID Protocol Mode Characteristic
-            uint8_t protocol_mode = 0x01;  // Report Protocol Mode (0x01)
-            esp_attr_value_t protocol_mode_attr = {
-                .attr_max_len = sizeof(protocol_mode),
-                .attr_len = sizeof(protocol_mode),
-                .attr_value = &protocol_mode
-            };
-            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
-            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR, &protocol_mode_attr, NULL));
+            // uint8_t protocol_mode = 0x01;  // Report Protocol Mode (0x01)
+            // esp_attr_value_t protocol_mode_attr = {
+            //     .attr_max_len = sizeof(protocol_mode),
+            //     .attr_len = sizeof(protocol_mode),
+            //     .attr_value = &protocol_mode
+            // };
+            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
+            // ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR, &protocol_mode_attr, NULL));
 
             // HID Report Map Characteristic
             char_id.uuid.uuid16 = ESP_GATT_UUID_HID_REPORT_MAP;
