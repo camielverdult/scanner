@@ -10,25 +10,27 @@
 #define TAG "BLE_SERVER"
 #define DEVICE_NAME "ESP32_BLE_SERVER"
 
-// Define a 16-bit GATT Service UUID
-// static uint16_t service_uuid = 0x00FF;
-static uint16_t hid_service_uuid = ESP_GATT_UUID_HID_SVC;
-static uint16_t hid_service_handle = 0;
+// HID service UUID (128-bit)
+static uint8_t hid_service_uuid[16] = {
+    /* LSB <--------------------------------------------------------------------------------> MSB */
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
+};
 
 // Advertising data
 static esp_ble_adv_data_t adv_data = {
     .set_scan_rsp = false,
     .include_name = true,
-    .include_txpower = true,
-    .min_interval = 0x20,
-    .max_interval = 0x40,
-    .appearance = 0xC0,         // Set the appearance to Generic HID device
-    .manufacturer_len = 0,
-    .p_manufacturer_data = NULL,
-    .service_data_len = 0,
-    .p_service_data = NULL,
-    .service_uuid_len = 2,
-    .p_service_uuid = (uint8_t*)&hid_service_uuid,
+    .include_txpower = false,
+    // .include_txpower = true,
+    // .min_interval = 0x20,
+    // .max_interval = 0x40,
+    // .appearance = 0xC0,         // Set the appearance to Generic HID device
+    // .manufacturer_len = 0,
+    // .p_manufacturer_data = NULL,
+    // .service_data_len = 0,
+    // .p_service_data = NULL,
+    .service_uuid_len = sizeof(hid_service_uuid),
+    .p_service_uuid = hid_service_uuid,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 
@@ -43,6 +45,9 @@ static esp_ble_adv_params_t adv_params = {
     .channel_map = ADV_CHNL_ALL,
     .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
 };
+
+// GATT service handle to add characteristics to
+static uint16_t hid_service_handle = 0;
 
 // Minimal HID Report Map for a Generic HID device
 static const uint8_t hid_report_map[] = {
@@ -144,8 +149,6 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
         case ESP_GATTS_CREATE_EVT:
             // The service is created during the server callback, add characteristics
             ESP_LOGI(TAG, "Service created");
-            // gatt_service_handle = param->create.service_handle;
-            // esp_ble_gatts_start_service(gatt_service_handle);
 
             hid_service_handle = param->create.service_handle;
 
@@ -202,10 +205,13 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
 
             // Configure advertising data and start advertising
             // ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
-            // esp_err_t res = esp_ble_gap_config_adv_data(&adv_data);
-            // if (res != ESP_OK) {
-            //     ESP_LOGE(TAG, "Failed to configure advertising data: %d", res);
-            // }
+            esp_err_t res = esp_ble_gap_config_adv_data(&adv_data);
+            if (res != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to configure advertising data: %d", res);
+                ESP_LOGI(TAG, "adv_data == NULL: %d", &adv_data == NULL);
+                ESP_LOGI(TAG, "adv_data->service_uuid_len & 0xf: %d", adv_data.service_uuid_len & 0xf);
+
+            }
             ESP_ERROR_CHECK(esp_ble_gap_start_advertising(&adv_params));
             break;
 
@@ -262,17 +268,13 @@ void app_main(void) {
     esp_bluedroid_init();
     esp_bluedroid_enable();
 
-    // Set device name for BLE advertising
+    // Register GAP layer
+    // Callback and device name for advertising
+    esp_ble_gap_register_callback(gap_event_handler);
     esp_ble_gap_set_device_name(DEVICE_NAME);
 
-    // Configure advertising data and start advertising
-    ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
-
-    // Register GAP and GATT callbacks
-    esp_ble_gap_register_callback(gap_event_handler);
+    // Register GATT callback and application profile to receive GATT events
     esp_ble_gatts_register_callback(gatt_event_handler);
-
-    // Register application profile to receive GATT events
     esp_ble_gatts_app_register(0);  // Application ID can be 0 or any unique value
 
     // Set authentication and bonding parameters
