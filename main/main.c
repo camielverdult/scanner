@@ -19,19 +19,11 @@ static uint8_t hid_service_uuid[16] = {
 // Advertising data
 static esp_ble_adv_data_t adv_data = {
     .set_scan_rsp = false,
-    .include_name = true,
-    .include_txpower = false,    // Set to false to save space
-    .min_interval = 0x0020,      // 40 ms
-    .max_interval = 0x0040,      // 80 ms
-    .appearance = 0xC0,          // Generic HID device appearance
-    .manufacturer_len = 0,
-    .p_manufacturer_data = NULL,
-    .service_data_len = 0,
-    .p_service_data = NULL,
-    .service_uuid_len = 0,       // Leave UUID length out here
-    .p_service_uuid = NULL,      // Remove UUID from main advertisement
+    .include_name = true,           // Include device name in main adv_data
+    .include_txpower = false,       // Exclude TX power to save space
+    .appearance = 0xC0,             // Generic HID device
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
-}; // Some fields are not set to stay within the 31-byte limit.
+};// Some fields are not set to stay within the 31-byte limit.
 
 /*
     Some advertising data (e.g., p_service_uuid) is moved from adv_data to 
@@ -41,8 +33,7 @@ static esp_ble_adv_data_t adv_data = {
 */
 static esp_ble_adv_data_t scan_rsp_data = {
     .set_scan_rsp = true,
-    .include_name = false,      // Name is already in main adv_data
-    .include_txpower = false,   // Optional, to save space
+    .include_name = false,          // Name already in main adv_data
     .service_uuid_len = sizeof(hid_service_uuid),
     .p_service_uuid = hid_service_uuid,
 };
@@ -64,16 +55,18 @@ static uint16_t hid_service_handle = 0;
 
 // Minimal HID Report Map for a Generic HID device
 static const uint8_t hid_report_map[] = {
-    0x06, 0x00, 0xFF,       // Usage Page (Vendor Defined)
-    0x09, 0x01,             // Usage (Vendor Usage 1)
-    0xA1, 0x01,             // Collection (Application)
-    0x09, 0x01,             // Usage (Vendor Usage 1)
-    0x15, 0x00,             // Logical Minimum (0)
-    0x26, 0xFF, 0x00,       // Logical Maximum (255)
-    0x75, 0x08,             // Report Size (8 bits)
-    0x95, 0x01,             // Report Count (1)
-    0x81, 0x02,             // Input (Data, Var, Abs)
-    0xC0                    // End Collection
+    0x05, 0x01,  // Usage Page (Generic Desktop)
+    0x09, 0x06,  // Usage (Keyboard)
+    0xA1, 0x01,  // Collection (Application)
+    0x05, 0x07,  // Usage Page (Key Codes)
+    0x19, 0xe0,  // Usage Minimum (224)
+    0x29, 0xe7,  // Usage Maximum (231)
+    0x15, 0x00,  // Logical Minimum (0)
+    0x25, 0x01,  // Logical Maximum (1)
+    0x75, 0x01,  // Report Size (1)
+    0x95, 0x08,  // Report Count (8)
+    0x81, 0x02,  // Input (Data, Variable, Absolute)
+    0xC0         // End Collection
 };
 
 // HID Information characteristic (version 1.11, country code 0x00, flags 0x01)
@@ -180,20 +173,31 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             };
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &hid_info_attr, NULL));
 
-            // Add HID Boot Mode characteristic
-            uint8_t boot_mode = 0x00;  // Boot Mode
-            esp_attr_value_t boot_mode_attr = {
-                .attr_max_len = sizeof(boot_mode),
-                .attr_len = sizeof(boot_mode),
-                .attr_value = &boot_mode
+            // // Add HID Boot Mode characteristic
+            // don't need this in favor of the HID Protocol Mode characteristic
+            // uint8_t boot_mode = 0x00;  // Boot Mode
+            // esp_attr_value_t boot_mode_attr = {
+            //     .attr_max_len = sizeof(boot_mode),
+            //     .attr_len = sizeof(boot_mode),
+            //     .attr_value = &boot_mode
+            // };
+
+            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
+            // esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+            //                ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
+            //                &boot_mode_attr, NULL);
+
+            // HID Protocol Mode Characteristic
+            uint8_t protocol_mode = 0x01;  // Report Protocol Mode (0x01)
+            esp_attr_value_t protocol_mode_attr = {
+                .attr_max_len = sizeof(protocol_mode),
+                .attr_len = sizeof(protocol_mode),
+                .attr_value = &protocol_mode
             };
-
             char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
-            esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
-                           ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
-                           &boot_mode_attr, NULL);
+            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR, &protocol_mode_attr, NULL));
 
-            // Add HID Report Map characteristic
+            // HID Report Map Characteristic
             char_id.uuid.uuid16 = ESP_GATT_UUID_HID_REPORT_MAP;
             esp_attr_value_t report_map_attr = {
                 .attr_max_len = sizeof(hid_report_map),
@@ -206,18 +210,14 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             char_id.uuid.uuid16 = ESP_GATT_UUID_HID_CONTROL_POINT;
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_WRITE_NR, NULL, NULL));
 
-            // Add HID Protocol Mode characteristic
-            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
-            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR, NULL, NULL));
-
             // Start the HID service
             ESP_LOGI(TAG, "Starting HID service");
             ESP_ERROR_CHECK(esp_ble_gatts_start_service(hid_service_handle));
 
             ESP_LOGI(TAG, "Starting advertising");
-
             // Configure advertising data
             ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
+
             // Configure scan response data
             ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&scan_rsp_data));
             
@@ -235,8 +235,8 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             esp_ble_conn_update_params_t conn_params = {0};
             memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
             conn_params.latency = 0;
-            conn_params.min_int = 0x0032;  // 50 ms
-            conn_params.max_int = 0x0050;  // 100 ms
+            conn_params.min_int = 0x0010;  // 20 ms
+            conn_params.max_int = 0x0020;  // 40 ms
             conn_params.timeout = 600;  // Supervision timeout: 6 seconds (recommended for iOS stability)
             esp_ble_gap_update_conn_params(&conn_params);
 
