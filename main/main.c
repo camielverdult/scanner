@@ -20,18 +20,31 @@ static uint8_t hid_service_uuid[16] = {
 static esp_ble_adv_data_t adv_data = {
     .set_scan_rsp = false,
     .include_name = true,
-    .include_txpower = false,
-    .include_txpower = true,
-    .min_interval = 0x20,
-    .max_interval = 0x40,
-    .appearance = 0xC0,         // Set the appearance to Generic HID device
+    .include_txpower = false,    // Set to false to save space
+    .min_interval = 0x0020,      // 40 ms
+    .max_interval = 0x0040,      // 80 ms
+    .appearance = 0xC0,          // Generic HID device appearance
     .manufacturer_len = 0,
     .p_manufacturer_data = NULL,
     .service_data_len = 0,
     .p_service_data = NULL,
+    .service_uuid_len = 0,       // Leave UUID length out here
+    .p_service_uuid = NULL,      // Remove UUID from main advertisement
+    .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
+}; // Some fields are not set to stay within the 31-byte limit.
+
+/*
+    Some advertising data (e.g., p_service_uuid) is moved from adv_data to 
+    the separate scan response data structure below. 
+    This allows scanning devices to still access the data 
+    when they actively scan (request scan response).
+*/
+static esp_ble_adv_data_t scan_rsp_data = {
+    .set_scan_rsp = true,
+    .include_name = false,      // Name is already in main adv_data
+    .include_txpower = false,   // Optional, to save space
     .service_uuid_len = sizeof(hid_service_uuid),
     .p_service_uuid = hid_service_uuid,
-    .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 
 // Advertising parameters
@@ -203,15 +216,12 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
 
             ESP_LOGI(TAG, "Starting advertising");
 
-            // Configure advertising data and start advertising
-            // ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
-            esp_err_t res = esp_ble_gap_config_adv_data(&adv_data);
-            if (res != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to configure advertising data: %d", res);
-                ESP_LOGI(TAG, "adv_data == NULL: %d", &adv_data == NULL);
-                ESP_LOGI(TAG, "adv_data->service_uuid_len & 0xf: %d", adv_data.service_uuid_len & 0xf);
-
-            }
+            // Configure advertising data
+            ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
+            // Configure scan response data
+            ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&scan_rsp_data));
+            
+            // Start advertising
             ESP_ERROR_CHECK(esp_ble_gap_start_advertising(&adv_params));
             break;
 
