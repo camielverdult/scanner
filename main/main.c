@@ -21,14 +21,14 @@ static esp_ble_adv_data_t adv_data = {
     .set_scan_rsp = false,
     .include_name = true,
     .include_txpower = false,
-    // .include_txpower = true,
-    // .min_interval = 0x20,
-    // .max_interval = 0x40,
-    // .appearance = 0xC0,         // Set the appearance to Generic HID device
-    // .manufacturer_len = 0,
-    // .p_manufacturer_data = NULL,
-    // .service_data_len = 0,
-    // .p_service_data = NULL,
+    .include_txpower = true,
+    .min_interval = 0x20,
+    .max_interval = 0x40,
+    .appearance = 0xC0,         // Set the appearance to Generic HID device
+    .manufacturer_len = 0,
+    .p_manufacturer_data = NULL,
+    .service_data_len = 0,
+    .p_service_data = NULL,
     .service_uuid_len = sizeof(hid_service_uuid),
     .p_service_uuid = hid_service_uuid,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
@@ -93,14 +93,14 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(TAG, "Advertising stopped");
             break;
 
-        // case ESP_GAP_BLE_AUTH_CMPL_EVT:
-        //     ESP_LOGI(TAG, "Authentication completed, success: %d", param->ble_security.auth_cmpl.success);
-        //     break;
+        case ESP_GAP_BLE_AUTH_CMPL_EVT:
+            ESP_LOGI(TAG, "Authentication completed, success: %d", param->ble_security.auth_cmpl.success);
+            break;
 
-        // case ESP_GAP_BLE_PASSKEY_REQ_EVT:
-        //     ESP_LOGI(TAG, "Passkey requested");
-        //     esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 123456);  // Example passkey
-        //     break;
+        case ESP_GAP_BLE_PASSKEY_REQ_EVT:
+            ESP_LOGI(TAG, "Passkey requested");
+            esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 123456);  // Example passkey
+            break;
 
         case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT:
             if (param->read_rssi_cmpl.status == ESP_BT_STATUS_SUCCESS) {
@@ -221,6 +221,15 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             // Store the connected device's address for RSSI tracking
             memcpy(connected_device_addr, param->connect.remote_bda, sizeof(esp_bd_addr_t));
 
+            // Update connection parameters
+            esp_ble_conn_update_params_t conn_params = {0};
+            memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+            conn_params.latency = 0;
+            conn_params.min_int = 0x0020;  // 40 ms
+            conn_params.max_int = 0x0040;  // 80 ms
+            conn_params.timeout = 400;     // Supervision timeout: 4 seconds
+            esp_ble_gap_update_conn_params(&conn_params);
+
             // Start the RSSI polling timer
             if (rssi_timer == NULL) {
                 rssi_timer = xTimerCreate("RSSI_Timer", pdMS_TO_TICKS(READ_RSSI_TIMEOUT_MS), pdTRUE, (void*)0, rssi_timer_callback);  // 2-second interval
@@ -279,17 +288,17 @@ void app_main(void) {
 
     // Set authentication and bonding parameters
     esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;  // Enable bonding with MITM protection
-    esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(auth_req));
+    ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(auth_req)));
 
     // Set the maximum key size for encryption
     uint8_t key_size = 16;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(key_size));
+    ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(key_size)));
 
     // Set the authentication options
     uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option));
+    ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option)));
 
     // Display Only for pairing
     uint8_t iocap = ESP_IO_CAP_OUT;
-    esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap));
+    ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap)));
 }
