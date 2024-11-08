@@ -111,6 +111,7 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
 
     switch (event) {
         case ESP_GATTS_REG_EVT:
+            // The server is started, register the service
             ESP_LOGI(TAG, "GATT server registered, creating service");
 
             // Create a primary service
@@ -121,9 +122,11 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
 
             // Create the service and allocate space for attributes
             esp_ble_gatts_create_service(gatts_if, &service_id, 4);
+            // This will trigger a ESP_GATTS_CREATE_EVT event
             break;
 
         case ESP_GATTS_CREATE_EVT:
+            // The service is created during the server callback, add characteristics
             ESP_LOGI(TAG, "Service created, starting service and advertising");
             gatt_service_handle = param->create.service_handle;
             esp_ble_gatts_start_service(gatt_service_handle);
