@@ -235,9 +235,9 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             esp_ble_conn_update_params_t conn_params = {0};
             memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
             conn_params.latency = 0;
-            conn_params.min_int = 0x0020;  // 40 ms
-            conn_params.max_int = 0x0040;  // 80 ms
-            conn_params.timeout = 400;     // Supervision timeout: 4 seconds
+            conn_params.min_int = 0x0032;  // 50 ms
+            conn_params.max_int = 0x0050;  // 100 ms
+            conn_params.timeout = 600;  // Supervision timeout: 6 seconds (recommended for iOS stability)
             esp_ble_gap_update_conn_params(&conn_params);
 
             // Start the RSSI polling timer
