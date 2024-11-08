@@ -27,7 +27,7 @@ static esp_ble_adv_data_t adv_data = {
     .p_manufacturer_data = NULL,
     .service_data_len = 0,
     .p_service_data = NULL,
-    .service_uuid_len = sizeof(hid_service_uuid),
+    .service_uuid_len = 2,
     .p_service_uuid = (uint8_t*)&hid_service_uuid,
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
@@ -57,6 +57,9 @@ static const uint8_t hid_report_map[] = {
     0x81, 0x02,             // Input (Data, Var, Abs)
     0xC0                    // End Collection
 };
+
+// HID Information characteristic (version 1.11, country code 0x00, flags 0x01)
+static const uint8_t hid_information[] = { 0x11, 0x01, 0x00, 0x01 };  // Version 1.11, Country Code 0x00, Flags 0x01
 
 // Store the address of the connected device
 static esp_bd_addr_t connected_device_addr = {0};
@@ -153,7 +156,26 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
                 .len = ESP_UUID_LEN_16,
                 .uuid.uuid16 = ESP_GATT_UUID_HID_INFORMATION
             };
-            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, NULL, NULL));
+
+            esp_attr_value_t hid_info_attr = {
+                .attr_max_len = sizeof(hid_information),
+                .attr_len = sizeof(hid_information),
+                .attr_value = (uint8_t *)hid_information
+            };
+            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &hid_info_attr, NULL));
+
+            // Add HID Boot Mode characteristic
+            uint8_t boot_mode = 0x00;  // Boot Mode
+            esp_attr_value_t boot_mode_attr = {
+                .attr_max_len = sizeof(boot_mode),
+                .attr_len = sizeof(boot_mode),
+                .attr_value = &boot_mode
+            };
+
+            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
+            esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                           ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
+                           &boot_mode_attr, NULL);
 
             // Add HID Report Map characteristic
             char_id.uuid.uuid16 = ESP_GATT_UUID_HID_REPORT_MAP;
@@ -180,10 +202,10 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
 
             // Configure advertising data and start advertising
             // ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
-            esp_err_t res = esp_ble_gap_config_adv_data(&adv_data);
-            if (res != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to configure advertising data: %d", res);
-            }
+            // esp_err_t res = esp_ble_gap_config_adv_data(&adv_data);
+            // if (res != ESP_OK) {
+            //     ESP_LOGE(TAG, "Failed to configure advertising data: %d", res);
+            // }
             ESP_ERROR_CHECK(esp_ble_gap_start_advertising(&adv_params));
             break;
 
@@ -204,7 +226,7 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             break;
 
         case ESP_GATTS_DISCONNECT_EVT:
-            ESP_LOGI(TAG, "Client disconnected, restarting advertising...");
+            ESP_LOGI(TAG, "Client disconnected, restarting advertising");
             
             // Clear the stored address
             memset(connected_device_addr, 0, sizeof(esp_bd_addr_t));
@@ -243,6 +265,9 @@ void app_main(void) {
     // Set device name for BLE advertising
     esp_ble_gap_set_device_name(DEVICE_NAME);
 
+    // Configure advertising data and start advertising
+    ESP_ERROR_CHECK(esp_ble_gap_config_adv_data(&adv_data));
+
     // Register GAP and GATT callbacks
     esp_ble_gap_register_callback(gap_event_handler);
     esp_ble_gatts_register_callback(gatt_event_handler);
@@ -261,4 +286,8 @@ void app_main(void) {
     // Set the authentication options
     uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
     esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option));
+
+    // Display Only for pairing
+    uint8_t iocap = ESP_IO_CAP_OUT;
+    esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap));
 }
