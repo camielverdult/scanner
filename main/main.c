@@ -345,6 +345,10 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             ESP_LOGI(TAG, "Congestion event");
             break;
 
+        case ESP_GATTS_RESPONSE_EVT:
+            ESP_LOGI(TAG, "Response event");
+            break;
+
         default:
             ESP_LOGW(TAG, "Unhandled GATT event: %d", event);
             break;
