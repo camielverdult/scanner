@@ -165,6 +165,10 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(TAG, "Connection parameters updated");
             break;
 
+        case ESP_GAP_BLE_KEY_EVT:
+            ESP_LOGI(TAG, "Key event for peer device keys");
+            break;
+
         default:
             ESP_LOGW(TAG, "Unhandled GAP event: %d", event);
             break;
@@ -178,13 +182,17 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             // The server is started, register the service
             ESP_LOGI(TAG, "GATT server registered, creating HID service");
 
+            // Set the local icon for the device
+            // esp_ble_gap_config_local_icon(ESP_BLE_APPEARANCE_GENERIC_HID);
+
+            // Create the HID service
             esp_gatt_srvc_id_t hid_service_id = {
                 .is_primary = true,
                 .id.inst_id = 0x00,
                 .id.uuid.len = ESP_UUID_LEN_16,
                 .id.uuid.uuid.uuid16 = ESP_GATT_UUID_HID_SVC,
             };
-            ESP_ERROR_CHECK(esp_ble_gatts_create_service(gatts_if, &hid_service_id, 4));
+            ESP_ERROR_CHECK(esp_ble_gatts_create_service(gatts_if, &hid_service_id, 8));
             
             // This will trigger a ESP_GATTS_CREATE_EVT event
             break;
@@ -210,18 +218,18 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             };
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &hid_info_attr, NULL));
 
-            // Add HID Boot Mode characteristic
-            uint8_t boot_mode = 0x00;  // Boot Mode
-            esp_attr_value_t boot_mode_attr = {
-                .attr_max_len = sizeof(boot_mode),
-                .attr_len = sizeof(boot_mode),
-                .attr_value = &boot_mode
-            };
+            // // Add HID Boot Mode characteristic
+            // uint8_t boot_mode = 0x00;  // Boot Mode
+            // esp_attr_value_t boot_mode_attr = {
+            //     .attr_max_len = sizeof(boot_mode),
+            //     .attr_len = sizeof(boot_mode),
+            //     .attr_value = &boot_mode
+            // };
 
-            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
-            esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
-                           ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
-                           &boot_mode_attr, NULL);
+            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_PROTO_MODE;
+            // esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+            //                ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR,
+            //                &boot_mode_attr, NULL);
 
             // HID Protocol Mode Characteristic
             // uint8_t protocol_mode = 0x01;  // Report Protocol Mode (0x01)
@@ -242,9 +250,9 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             };
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &report_map_attr, NULL));
 
-            // Add HID Control Point characteristic
-            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_CONTROL_POINT;
-            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_WRITE_NR, NULL, NULL));
+            // // Add HID Control Point characteristic
+            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_CONTROL_POINT;
+            // ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_WRITE_NR, NULL, NULL));
 
             // Start the HID service
             ESP_LOGI(TAG, "Starting HID service");
@@ -267,18 +275,34 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             // Store the connected device's address for RSSI tracking
             memcpy(connected_device_addr, param->connect.remote_bda, sizeof(esp_bd_addr_t));
 
+            // Enable encryption with no MITM protection for this connection
+            esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_NO_MITM);
+
             // Update connection parameters
-            esp_ble_conn_update_params_t conn_params = {0};
-            memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
-            conn_params.latency = 0;
-            conn_params.min_int = 0x0010;  // 20 ms
-            conn_params.max_int = 0x0020;  // 40 ms
-            conn_params.timeout = 600;  // Supervision timeout: 6 seconds (recommended for iOS stability)
-            esp_ble_gap_update_conn_params(&conn_params);
+            // esp_ble_conn_update_params_t conn_params = {0};
+            // memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
+            // conn_params.latency = 0;
+            // conn_params.min_int = 0x0010;  // 20 ms
+            // conn_params.max_int = 0x0020;  // 40 ms
+            // conn_params.timeout = 600;  // Supervision timeout: 6 seconds (recommended for iOS stability)
+            // esp_ble_gap_update_conn_params(&conn_params);
+            break;
+
+        case ESP_GAP_BLE_PASSKEY_NOTIF_EVT:
+            ESP_LOGI(TAG, "Passkey notification");
             break;
 
         case ESP_GATTS_READ_EVT:
-            ESP_LOGI(TAG, "Read event, handle: %d", param->read.handle);
+            ESP_LOGI(TAG, "Read event, handle: %d. Responding with HID Information", param->read.handle);
+
+            esp_gatt_rsp_t rsp;
+            memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
+            rsp.attr_value.handle = param->read.handle;
+            rsp.attr_value.len = sizeof(hid_information);  // Or the length of the characteristic being read
+            memcpy(rsp.attr_value.value, hid_information, sizeof(hid_information));
+            
+            esp_ble_gatts_send_response(gatts_if, param->read.conn_id, param->read.trans_id,
+                                        ESP_GATT_OK, &rsp);
             break;
 
         case ESP_GATTS_WRITE_EVT:
@@ -351,7 +375,7 @@ void app_main(void) {
     esp_ble_gatts_app_register(0);  // Application ID can be 0 or any unique value
 
     // Set authentication and bonding parameters
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;  // Enable bonding with MITM protection
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;  // Enable bonding
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(auth_req)));
 
     // Set the maximum key size for encryption
@@ -359,10 +383,15 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_MAX_KEY_SIZE, &key_size, sizeof(key_size)));
 
     // Set the authentication options
-    uint8_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
-    ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option)));
+    // esp_ble_sm_param_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
+    // ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option)));
 
-    // Display Only for pairing
-    uint8_t iocap = ESP_IO_CAP_OUT;
+    // NoInputNoOutput
+    uint8_t iocap = ESP_IO_CAP_NONE;
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap)));
+
+    uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+    uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
+    esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rsp_key, sizeof(uint8_t));
 }
