@@ -54,20 +54,20 @@ static esp_ble_adv_params_t adv_params = {
 static uint16_t hid_service_handle = 0;
 
 // Minimal HID Report Map for a Generic HID device
-static const uint8_t hid_report_map[] = {
-    0x05, 0x01,  // Usage Page (Generic Desktop)
-    0x09, 0x06,  // Usage (Keyboard)
-    0xA1, 0x01,  // Collection (Application)
-    0x05, 0x07,  // Usage Page (Key Codes)
-    0x19, 0xe0,  // Usage Minimum (224)
-    0x29, 0xe7,  // Usage Maximum (231)
-    0x15, 0x00,  // Logical Minimum (0)
-    0x25, 0x01,  // Logical Maximum (1)
-    0x75, 0x01,  // Report Size (1)
-    0x95, 0x08,  // Report Count (8)
-    0x81, 0x02,  // Input (Data, Variable, Absolute)
-    0xC0         // End Collection
-};
+// static const uint8_t hid_report_map[] = {
+//     0x05, 0x01,  // Usage Page (Generic Desktop)
+//     0x09, 0x06,  // Usage (Keyboard)
+//     0xA1, 0x01,  // Collection (Application)
+//     0x05, 0x07,  // Usage Page (Key Codes)
+//     0x19, 0xe0,  // Usage Minimum (224)
+//     0x29, 0xe7,  // Usage Maximum (231)
+//     0x15, 0x00,  // Logical Minimum (0)
+//     0x25, 0x01,  // Logical Maximum (1)
+//     0x75, 0x01,  // Report Size (1)
+//     0x95, 0x08,  // Report Count (8)
+//     0x81, 0x02,  // Input (Data, Variable, Absolute)
+//     0xC0         // End Collection
+// };
 
 // HID Information characteristic (version 1.11, country code 0x00, flags 0x01)
 static const uint8_t hid_information[] = { 0x11, 0x01, 0x00, 0x01 };  // Version 1.11, Country Code 0x00, Flags 0x01
@@ -206,6 +206,8 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             ESP_LOGI(TAG, "Adding HID characteristics");
 
             // Add HID Information characteristic
+            // This is the bare mnimum characteristic required for the service
+            // to be recognized as a human-connectable device
             esp_bt_uuid_t char_id = {
                 .len = ESP_UUID_LEN_16,
                 .uuid.uuid16 = ESP_GATT_UUID_HID_INFORMATION
@@ -242,13 +244,13 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             // ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR, &protocol_mode_attr, NULL));
 
             // HID Report Map Characteristic
-            char_id.uuid.uuid16 = ESP_GATT_UUID_HID_REPORT_MAP;
-            esp_attr_value_t report_map_attr = {
-                .attr_max_len = sizeof(hid_report_map),
-                .attr_len = sizeof(hid_report_map),
-                .attr_value = (uint8_t*)hid_report_map
-            };
-            ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &report_map_attr, NULL));
+            // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_REPORT_MAP;
+            // esp_attr_value_t report_map_attr = {
+            //     .attr_max_len = sizeof(hid_report_map),
+            //     .attr_len = sizeof(hid_report_map),
+            //     .attr_value = (uint8_t*)hid_report_map
+            // };
+            // ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &report_map_attr, NULL));
 
             // // Add HID Control Point characteristic
             // char_id.uuid.uuid16 = ESP_GATT_UUID_HID_CONTROL_POINT;
