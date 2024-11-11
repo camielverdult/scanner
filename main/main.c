@@ -79,10 +79,29 @@ static esp_bd_addr_t connected_device_addr = {0};
 static TimerHandle_t rssi_timer;
 
 // RSSI read interval in milliseconds
-#define READ_RSSI_TIMEOUT_MS 250
+#define READ_RSSI_TIMEOUT_MS 200
 
 static float smoothed_rssi = 0.0;  // Smoothed RSSI value for distance approximation
 static float alpha = 0.2;          // Low-pass filter coefficient
+
+
+// RSSI timer callback function
+void rssi_timer_callback(TimerHandle_t xTimer) {
+    // Read RSSI of the connected device
+    ESP_ERROR_CHECK(esp_ble_gap_read_rssi(connected_device_addr));
+}
+
+void start_rssi_timer() {
+    // Start the RSSI polling timer
+    if (rssi_timer == NULL) {
+        ESP_LOGI(TAG, "Starting RSSI timer\nFiltered_RSSI,Raw_RSSI");
+        rssi_timer = xTimerCreate("RSSI_Timer", pdMS_TO_TICKS(READ_RSSI_TIMEOUT_MS), pdTRUE, (void*)0, rssi_timer_callback);  // 2-second interval
+        xTimerStart(rssi_timer, 0);
+    } else {
+        ESP_LOGW(TAG, "RSSI timer already exists, resetting");
+        xTimerReset(rssi_timer, 0);  // Reset timer if it already exists
+    }
+}
 
 // GAP event handler for managing advertising
 void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
@@ -103,9 +122,12 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(TAG, "Authentication completed, success: %d", param->ble_security.auth_cmpl.success);
             break;
 
-        case ESP_GAP_BLE_PASSKEY_REQ_EVT:
-            ESP_LOGI(TAG, "Passkey requested");
-            esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 123456);  // Example passkey
+        case ESP_GAP_BLE_SEC_REQ_EVT:
+            ESP_LOGI(TAG, "Security request received");
+            // for(int i = 0; i < ESP_BD_ADDR_LEN; i++) {
+            //     ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
+            // }
+            ESP_ERROR_CHECK(esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true));
             break;
 
         case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT:
@@ -117,21 +139,36 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
                 } else {
                     smoothed_rssi = rssi * alpha + smoothed_rssi * (1.0 - alpha);  // Low-pass filter
                 }
-                ESP_LOGI(TAG, "Smoothed RSSI: %.2f dBm (Raw: %d dBm)", smoothed_rssi, rssi);
+                ESP_LOGI(TAG, "RSSI (smoothed, raw): %.2f, %d", smoothed_rssi, rssi);
             } else {
                 ESP_LOGE(TAG, "Failed to read RSSI");
             }
             break;
 
+        case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+            ESP_LOGI(TAG, "Advertising data set");
+            break;
+
+        case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
+            ESP_LOGI(TAG, "Scan response data set");
+            break;
+
+        case ESP_GAP_BLE_SET_PKT_LENGTH_COMPLETE_EVT:
+            ESP_LOGI(TAG, "Set pkt length complete");
+            break;
+
+        case ESP_GAP_BLE_PHY_UPDATE_COMPLETE_EVT:
+            ESP_LOGI(TAG, "PHY update complete");
+            break;
+
+        case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
+            ESP_LOGI(TAG, "Connection parameters updated");
+            break;
+
         default:
+            ESP_LOGW(TAG, "Unhandled GAP event: %d", event);
             break;
     }
-}
-
-// RSSI timer callback function
-void rssi_timer_callback(TimerHandle_t xTimer) {
-    // Read RSSI of the connected device
-    ESP_ERROR_CHECK(esp_ble_gap_read_rssi(connected_device_addr));
 }
 
 // GATT server event handler
@@ -238,15 +275,14 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             conn_params.max_int = 0x0020;  // 40 ms
             conn_params.timeout = 600;  // Supervision timeout: 6 seconds (recommended for iOS stability)
             esp_ble_gap_update_conn_params(&conn_params);
+            break;
 
-            // Start the RSSI polling timer
-            if (rssi_timer == NULL) {
-                rssi_timer = xTimerCreate("RSSI_Timer", pdMS_TO_TICKS(READ_RSSI_TIMEOUT_MS), pdTRUE, (void*)0, rssi_timer_callback);  // 2-second interval
-                xTimerStart(rssi_timer, 0);
-            } else {
-                xTimerReset(rssi_timer, 0);  // Reset timer if it already exists
-            }
+        case ESP_GATTS_READ_EVT:
+            ESP_LOGI(TAG, "Read event, handle: %d", param->read.handle);
+            break;
 
+        case ESP_GATTS_WRITE_EVT:
+            ESP_LOGI(TAG, "Write event, handle: %d", param->write.handle);
             break;
 
         case ESP_GATTS_DISCONNECT_EVT:
@@ -265,7 +301,26 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             esp_ble_gap_start_advertising(&adv_params);  // Restart advertising on disconnection
             break;
 
+        // Events during configuration
+        case ESP_GATTS_ADD_CHAR_EVT:
+            ESP_LOGI(TAG, "Characteristic added, status: %d, attr_handle: %d", param->add_char.status, param->add_char.attr_handle);
+            break;
+
+        case ESP_GATTS_START_EVT:
+            ESP_LOGI(TAG, "Service started, status: %d", param->start.status);
+            break;
+
+        // Events during connection
+        case ESP_GATTS_MTU_EVT:
+            ESP_LOGI(TAG, "Set MTU complete, size: %d", param->mtu.mtu);
+            break;
+
+        case ESP_GATTS_CONGEST_EVT:
+            ESP_LOGI(TAG, "Congestion event");
+            break;
+
         default:
+            ESP_LOGW(TAG, "Unhandled GATT event: %d", event);
             break;
     }
 }
