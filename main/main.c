@@ -71,6 +71,7 @@ static uint16_t hid_service_handle = 0;
 
 // HID Information characteristic (version 1.11, country code 0x00, flags 0x01)
 static const uint8_t hid_information[] = { 0x11, 0x01, 0x00, 0x01 };  // Version 1.11, Country Code 0x00, Flags 0x01
+static uint16_t hid_info_handle = 0;
 
 // Store the address of the connected device
 static esp_bd_addr_t connected_device_addr = {0};
@@ -83,7 +84,6 @@ static TimerHandle_t rssi_timer;
 
 static float smoothed_rssi = 0.0;  // Smoothed RSSI value for distance approximation
 static float alpha = 0.2;          // Low-pass filter coefficient
-
 
 // RSSI timer callback function
 void rssi_timer_callback(TimerHandle_t xTimer) {
@@ -103,6 +103,25 @@ void start_rssi_timer() {
     }
 }
 
+void update_rssi(int rssi) {
+    if (smoothed_rssi == 0.0) {
+        smoothed_rssi = rssi;
+    } else {
+        smoothed_rssi = rssi * alpha + smoothed_rssi * (1.0 - alpha);  // Low-pass filter
+    }
+    ESP_LOGI(TAG, "%.2f,%d", smoothed_rssi, rssi);
+}
+
+void stop_rssi_timer() {
+    // Stop the RSSI polling timer
+    if (rssi_timer != NULL) {
+        smoothed_rssi = 0.0;  // Reset smoothed RSSI value
+
+        ESP_LOGI(TAG, "Stopping RSSI timer");
+        xTimerStop(rssi_timer, 0);
+    }
+}
+
 // GAP event handler for managing advertising
 void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     switch (event) {
@@ -119,27 +138,29 @@ void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             break;
 
         case ESP_GAP_BLE_AUTH_CMPL_EVT:
-            ESP_LOGI(TAG, "Authentication completed, success: %d", param->ble_security.auth_cmpl.success);
+            // Authentication complete event
+            if (param->ble_security.auth_cmpl.success == true) {
+                ESP_LOGI(TAG, "Authentication successful");
+                // Start the RSSI polling timer
+                start_rssi_timer();
+            } else {
+                ESP_LOGE(TAG, "Authentication failed");
+            }
             break;
 
-        case ESP_GAP_BLE_SEC_REQ_EVT:
-            ESP_LOGI(TAG, "Security request received");
-            // for(int i = 0; i < ESP_BD_ADDR_LEN; i++) {
-            //     ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
-            // }
-            ESP_ERROR_CHECK(esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true));
-            break;
+        // This was not called with the used security configuration
+        // case ESP_GAP_BLE_SEC_REQ_EVT:
+        //     ESP_LOGI(TAG, "Security request received");
+        //     // for(int i = 0; i < ESP_BD_ADDR_LEN; i++) {
+        //     //     ESP_LOGD(TAG, "%x:", param->ble_security.ble_req.bd_addr[i]);
+        //     // }
+        //     ESP_ERROR_CHECK(esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true));
+        //     break;
 
         case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT:
             if (param->read_rssi_cmpl.status == ESP_BT_STATUS_SUCCESS) {
                 int rssi = param->read_rssi_cmpl.rssi;
-
-                if (smoothed_rssi == 0.0) {
-                    smoothed_rssi = rssi;
-                } else {
-                    smoothed_rssi = rssi * alpha + smoothed_rssi * (1.0 - alpha);  // Low-pass filter
-                }
-                ESP_LOGI(TAG, "RSSI (smoothed, raw): %.2f, %d", smoothed_rssi, rssi);
+                update_rssi(rssi);
             } else {
                 ESP_LOGE(TAG, "Failed to read RSSI");
             }
@@ -220,6 +241,7 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             };
             ESP_ERROR_CHECK(esp_ble_gatts_add_char(hid_service_handle, &char_id, ESP_GATT_PERM_READ, ESP_GATT_CHAR_PROP_BIT_READ, &hid_info_attr, NULL));
 
+            // These were all not needed for the service to showup in iPhone Bluetooth settings
             // // Add HID Boot Mode characteristic
             // uint8_t boot_mode = 0x00;  // Boot Mode
             // esp_attr_value_t boot_mode_attr = {
@@ -295,16 +317,24 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             break;
 
         case ESP_GATTS_READ_EVT:
-            ESP_LOGI(TAG, "Read event, handle: %d. Responding with HID Information", param->read.handle);
+            uint16_t handle = param->read.handle;
+            ESP_LOGI(TAG, "Read event, handle: %d", param->read.handle);
 
-            esp_gatt_rsp_t rsp;
-            memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
-            rsp.attr_value.handle = param->read.handle;
-            rsp.attr_value.len = sizeof(hid_information);  // Or the length of the characteristic being read
-            memcpy(rsp.attr_value.value, hid_information, sizeof(hid_information));
-            
-            esp_ble_gatts_send_response(gatts_if, param->read.conn_id, param->read.trans_id,
-                                        ESP_GATT_OK, &rsp);
+            // Respond to HID Information read requests
+            if (handle == hid_info_handle) {
+                ESP_LOGI(TAG, "HID Information requested, sending response");
+                esp_gatt_rsp_t rsp;
+                memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
+                rsp.attr_value.handle = param->read.handle;
+                rsp.attr_value.len = sizeof(hid_information);
+                memcpy(rsp.attr_value.value, hid_information, sizeof(hid_information));
+                
+                esp_ble_gatts_send_response(gatts_if, param->read.conn_id, param->read.trans_id,
+                                            ESP_GATT_OK, &rsp);
+            } else {
+                ESP_LOGW(TAG, "Unhandled read request, handle: %d", handle);
+            }
+
             break;
 
         case ESP_GATTS_WRITE_EVT:
@@ -312,24 +342,27 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             break;
 
         case ESP_GATTS_DISCONNECT_EVT:
-            ESP_LOGI(TAG, "Client disconnected, restarting advertising");
+            ESP_LOGI(TAG, "Client disconnected");
+            stop_rssi_timer();  // Stop the RSSI polling timer
             
             // Clear the stored address
             memset(connected_device_addr, 0, sizeof(esp_bd_addr_t));
 
-            // Stop the RSSI polling timer
-            if (rssi_timer != NULL) {
-                xTimerStop(rssi_timer, 0);
-            }
-
-            smoothed_rssi = 0.0;  // Reset smoothed RSSI value
-
+            // Restart advertising
+            ESP_LOGI(TAG, "Restarting advertising");
             esp_ble_gap_start_advertising(&adv_params);  // Restart advertising on disconnection
             break;
 
         // Events during configuration
         case ESP_GATTS_ADD_CHAR_EVT:
+            esp_gatt_status_t status = param->add_char.status;
             ESP_LOGI(TAG, "Characteristic added, status: %d, attr_handle: %d", param->add_char.status, param->add_char.attr_handle);
+            if (status == ESP_GATT_OK) {
+                hid_info_handle = param->add_char.attr_handle;
+                ESP_LOGI(TAG, "Characteristic added successfully, handle stored");
+            } else {
+                ESP_LOGE(TAG, "Failed to add characteristic");
+            }
             break;
 
         case ESP_GATTS_START_EVT:
@@ -392,10 +425,11 @@ void app_main(void) {
     // esp_ble_sm_param_t auth_option = ESP_BLE_ONLY_ACCEPT_SPECIFIED_AUTH_DISABLE;
     // ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH, &auth_option, sizeof(auth_option)));
 
-    // NoInputNoOutput
+    // Setup IO capability
     uint8_t iocap = ESP_IO_CAP_NONE;
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(iocap)));
 
+    // Set the initial key for encryption
     uint8_t init_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     uint8_t rsp_key = ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK;
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &init_key, sizeof(uint8_t));
