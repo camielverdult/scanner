@@ -299,8 +299,8 @@ void gatt_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_
             // Store the connected device's address for RSSI tracking
             memcpy(connected_device_addr, param->connect.remote_bda, sizeof(esp_bd_addr_t));
 
-            // Enable encryption with no MITM protection for this connection
-            esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_NO_MITM);
+            // Enable encryption with MITM protection for this connection
+            esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_MITM);
 
             // Update connection parameters
             // esp_ble_conn_update_params_t conn_params = {0};
@@ -413,8 +413,8 @@ void app_main(void) {
     esp_ble_gatts_register_callback(gatt_event_handler);
     esp_ble_gatts_app_register(0);  // Application ID can be 0 or any unique value
 
-    // Set authentication and bonding parameters
-    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_BOND;  // Enable bonding
+    // Setup secure connection mode with MITM protection
+    esp_ble_auth_req_t auth_req = ESP_LE_AUTH_REQ_SC_MITM_BOND;
     ESP_ERROR_CHECK(esp_ble_gap_set_security_param(ESP_BLE_SM_AUTHEN_REQ_MODE, &auth_req, sizeof(auth_req)));
 
     // Set the maximum key size for encryption
